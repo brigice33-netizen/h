@@ -81,6 +81,11 @@ function hasRequiredPermissions(member, requiredPermissions = []) {
   return requiredPermissions.some((permission) => member.permissions.has(permission));
 }
 
+function hasCommandPermission(message, requiredPermissions = []) {
+  const userId = message?.author?.id || message?.user?.id;
+  return isTrueOwner(userId) || hasRequiredPermissions(message?.member, requiredPermissions);
+}
+
 function getGrantKey(userId, commandName) {
   return `${userId}:${String(commandName || '').toLowerCase()}`;
 }
@@ -240,7 +245,7 @@ async function requestOwnerAccess(message, { commandName, requiredPermissions = 
 async function authorizeOwnerCommand(message, { commandName, requiredPermissions = [], requireApproval = false, allowAllOwners = false }) {
   clearExpiredRequests();
 
-  const userId = message?.author?.id;
+  const userId = message?.author?.id || message?.user?.id;
   if (!userId) return false;
 
   const trueOwnerId = getTrueOwnerId();
@@ -331,6 +336,7 @@ module.exports = {
   isOwner,
   isTrustedUser,
   isTrueOwner,
+  hasCommandPermission,
   authorizeOwnerCommand,
   handleOwnerAccessInteraction,
   isTempAccessGranted,

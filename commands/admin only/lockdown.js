@@ -1,6 +1,6 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { applyGuildLockdown, unlockGuildLockdown, getLockdownRemainingMs } = require('../../utils/raidLockdown');
-const { authorizeOwnerCommand } = require('../../utils/owner');
+const { authorizeOwnerCommand, hasCommandPermission } = require('../../utils/owner');
 
 function parseDurationSeconds(value, fallback = 300) {
   const parsed = Number.parseInt(value, 10);
@@ -26,7 +26,7 @@ module.exports = {
       return;
     }
 
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageGuild) && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    if (!hasCommandPermission(message, [PermissionFlagsBits.ManageGuild])) {
       return message.reply('❌ You do not have permission to use lockdown.');
     }
 

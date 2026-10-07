@@ -1,5 +1,5 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const { authorizeOwnerCommand } = require('../../utils/owner');
+const { authorizeOwnerCommand, hasCommandPermission } = require('../../utils/owner');
 
 const CONFIRMATION_TTL_MS = 60 * 1000;
 const PENDING_NUKES = new Map();
@@ -88,7 +88,7 @@ module.exports = {
       return;
     }
 
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
+    if (!hasCommandPermission(message, [PermissionFlagsBits.ManageMessages])) {
       return message.reply('❌ You do not have permission to delete messages.');
     }
 

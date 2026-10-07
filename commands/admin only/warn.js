@@ -1,6 +1,6 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { recordWarning } = require('../../database');
-const { authorizeOwnerCommand } = require('../../utils/owner');
+const { authorizeOwnerCommand, hasCommandPermission } = require('../../utils/owner');
 
 module.exports = {
   name: 'warn',
@@ -18,7 +18,7 @@ module.exports = {
       return;
     }
 
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageMessages) && !message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+    if (!hasCommandPermission(message, [PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ModerateMembers])) {
       return message.reply('❌ You do not have permission to warn members.');
     }
 

@@ -3,6 +3,11 @@ const fs = require('fs');
 const path = require('path');
 const { authorizeOwnerCommand, grantTempAccess, grantAllTempAccess, isTempAccessGranted } = require('../../utils/owner');
 
+const RESTRICTED_COMMANDS = new Set([
+  'lockdown', 'nuke', 'paste', 'reset', 'resetserver', 'restore', 'serverlist', 'sl', 'snapshot', 'economysnapshot',
+  'saveeconomy', 'leaveserver', 'ls', 'copy', 'banall', 'baneveryone', 'antinuke', 'raidguard', 'antiraid', 'massban'
+]);
+
 function normalizeCommandName(value) {
   if (!value) return null;
   const normalized = String(value).trim().toLowerCase();
@@ -25,9 +30,6 @@ function getAllCommandAccessNames(startDir = path.join(__dirname, '..', '..', 'c
 
     try {
       const commandModule = require(entryPath);
-      if (commandModule?.ownerOnly) {
-        continue;
-      }
       if (commandModule?.name) {
         names.add(String(commandModule.name).trim().toLowerCase());
       }
@@ -50,13 +52,14 @@ function getRequestedGrantCommands(requestedCommands) {
   const availableCommands = new Set(getAllCommandAccessNames());
   const grantAll = requestedCommands.includes('all');
   const uniqueCommands = [...new Set(requestedCommands.filter((value) => value !== 'all'))];
+  const isGrantable = (commandName) => availableCommands.has(commandName) && !RESTRICTED_COMMANDS.has(commandName);
 
   return {
     grantAll,
     grantCommands: grantAll
-      ? [...availableCommands]
-      : uniqueCommands.filter((commandName) => availableCommands.has(commandName)),
-    unsupportedCommands: uniqueCommands.filter((commandName) => !availableCommands.has(commandName))
+      ? [...availableCommands].filter((commandName) => !RESTRICTED_COMMANDS.has(commandName))
+      : uniqueCommands.filter(isGrantable),
+    unsupportedCommands: uniqueCommands.filter((commandName) => !isGrantable(commandName))
   };
 }
 
@@ -132,7 +135,7 @@ module.exports = {
         grantedNow.length > 0 || alreadyGranted.length > 0
           ? [
               grantAll
-                ? `Granted access to ${target} for all non-owner-only commands. Owner-only commands remain restricted.`
+                ? `Granted access to ${target} for all commands except restricted administrative commands.`
                 : `Approved access for ${target} has been updated for the permitted commands.`,
               grantedNow.length > 0 ? `Granted: ${grantAll ? grantedNow[0] : grantedNow.map((commandName) => `\`${commandName}\``).join(', ')}.` : null,
               alreadyGranted.length > 0 ? `Already existed: ${grantAll ? alreadyGranted[0] : alreadyGranted.map((commandName) => `\`${commandName}\``).join(', ')}.` : null,

@@ -2,7 +2,7 @@ const { EmbedBuilder } = require('discord.js');
 const { setLockedNickname } = require('../../database');
 const { PermissionFlagsBits } = require('discord.js');
 const { isProtectedNicknameTarget } = require('../../utils/protectedNicknames');
-const { authorizeOwnerCommand } = require('../../utils/owner');
+const { authorizeOwnerCommand, hasCommandPermission } = require('../../utils/owner');
 
 module.exports = {
   name: 'setnick',
@@ -20,7 +20,7 @@ module.exports = {
       return message.reply('❌ This command must be used in a server.');
     }
 
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageNicknames) && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    if (!hasCommandPermission(message, [PermissionFlagsBits.ManageNicknames])) {
       return message.reply('❌ You need Manage Nicknames to use this command.');
     }
 

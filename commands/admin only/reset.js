@@ -1,5 +1,5 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const { authorizeOwnerCommand } = require('../../utils/owner');
+const { authorizeOwnerCommand, hasCommandPermission } = require('../../utils/owner');
 const { sendAdminProgressDm } = require('../../utils/adminProgress');
 const { getProtectedGuildIds } = require('../../utils/safety');
 
@@ -26,7 +26,7 @@ module.exports = {
       return;
     }
 
-    if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    if (!hasCommandPermission(message, [PermissionFlagsBits.Administrator])) {
       return message.reply('❌ You need Administrator permission to reset a server.');
     }
 

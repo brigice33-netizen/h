@@ -1,5 +1,5 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const { authorizeOwnerCommand } = require('../../utils/owner');
+const { authorizeOwnerCommand, hasCommandPermission } = require('../../utils/owner');
 
 module.exports = {
   name: 'softban',
@@ -17,7 +17,7 @@ module.exports = {
       return;
     }
 
-    if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) {
+    if (!hasCommandPermission(message, [PermissionFlagsBits.BanMembers])) {
       return message.reply('❌ You do not have permission to ban members.');
     }
 

@@ -1,6 +1,6 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { addCoins, ensureUser } = require('../../database');
-const { authorizeOwnerCommand } = require('../../utils/owner');
+const { authorizeOwnerCommand, hasCommandPermission } = require('../../utils/owner');
 
 module.exports = {
   name: 'givecoin',
@@ -13,7 +13,7 @@ module.exports = {
       return;
     }
 
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+    if (!hasCommandPermission(message, [PermissionFlagsBits.ManageGuild])) {
       return message.reply('❌ You do not have permission to give coins.');
     }
 

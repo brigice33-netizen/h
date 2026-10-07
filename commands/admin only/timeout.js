@@ -1,5 +1,5 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const { authorizeOwnerCommand } = require('../../utils/owner');
+const { authorizeOwnerCommand, hasCommandPermission } = require('../../utils/owner');
 
 function parseDuration(duration) {
   const match = duration?.toString().match(/^(\d+)([smhd])$/i);
@@ -33,7 +33,7 @@ module.exports = {
       return;
     }
 
-    if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+    if (!hasCommandPermission(message, [PermissionFlagsBits.ModerateMembers])) {
       return message.reply('❌ You do not have permission to timeout members.');
     }
 

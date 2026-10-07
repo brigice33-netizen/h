@@ -2,6 +2,7 @@ const { EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js')
 const { createImageHash, isImageAttachment } = require('../../utils/imageBan');
 const { addBannedImage, getBannedImages, removeBannedImage, getAuditLogs, setConfig } = require('../../database');
 const { ensureTicketLogChannel } = require('../../utils/ticketSystem');
+const { hasCommandPermission } = require('../../utils/owner');
 
 const ROLE_NAME = 'Hazardous';
 const CHANNEL_NAME = 'hazardous-only';
@@ -67,7 +68,7 @@ module.exports = {
 
   async execute(message, args = []) {
     if (!message.guild) return message.reply('This command can only be used in a server.');
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageGuild)) return message.reply('You need Manage Server to use this command.');
+    if (!hasCommandPermission(message, [PermissionFlagsBits.ManageGuild])) return message.reply('You need Manage Server to use this command.');
     const action = String(args[0] || 'setup').toLowerCase();
 
     try {

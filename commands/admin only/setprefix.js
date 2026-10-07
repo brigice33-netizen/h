@@ -33,7 +33,7 @@ module.exports = {
     try {
       let envContent = fs.readFileSync(envPath, 'utf8');
       if (/^PREFIX=.*$/m.test(envContent)) {
-        envContent = envContent.replace(/^PREFIX=.*$/m, `PREFIX=${newPrefix}`);
+        envContent = envContent.replace(/^PREFIX=.*$/m, () => `PREFIX=${newPrefix}`);
       } else {
         envContent += `\nPREFIX=${newPrefix}\n`;
       }

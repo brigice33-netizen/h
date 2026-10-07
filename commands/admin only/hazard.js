@@ -1,5 +1,6 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { getConfig } = require('../../database');
+const { hasCommandPermission } = require('../../utils/owner');
 
 const HAZARDOUS_ROLE_NAME = 'Hazardous';
 
@@ -12,7 +13,7 @@ module.exports = {
 
   async execute(message, args = []) {
     if (!message.guild) return message.reply('This command can only be used in a server.');
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageRoles)) return message.reply('You need Manage Roles to use this command.');
+    if (!hasCommandPermission(message, [PermissionFlagsBits.ManageRoles])) return message.reply('You need Manage Roles to use this command.');
 
     const target = message.mentions.members.first() || message.guild.members.cache.get(String(args[0] || '').replace(/\D/g, ''));
     if (!target) return message.reply('Usage: `~hazard @user`');

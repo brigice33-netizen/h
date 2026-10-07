@@ -1,6 +1,7 @@
 const { EmbedBuilder, PermissionFlagsBits, PermissionsBitField } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const { hasCommandPermission } = require('../../utils/owner');
 
 const STATES_PATH = path.join(__dirname, '..', '..', 'data', 'lockchannel_states.json');
 let savedStates = {};
@@ -33,7 +34,7 @@ module.exports = {
   async execute(message, args = []) {
     if (!message.guild) return message.reply('❌ This command can only be used in a server.');
 
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels) && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    if (!hasCommandPermission(message, [PermissionFlagsBits.ManageChannels])) {
       return message.reply('❌ You do not have permission to use this command.');
     }
 

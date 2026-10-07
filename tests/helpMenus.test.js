@@ -4,7 +4,7 @@ const { PermissionFlagsBits } = require('discord.js');
 const { getCommandDetails, getAdminCommands, isKingflexCommand, isCmdhelpVisibleCommand, getHelpCategory } = require('../utils/helpMenus');
 const { getProtectedGuildIds, validateBotSafetyConfig } = require('../utils/safety');
 const { isBotCommandAllowedWhileDisabled, isCoinEconomyEnabled, isCoinCommandAllowedWhileDisabled } = require('../utils/commandAccess');
-const { isTrueOwner, getTrueOwnerId, getTrustedUserIds, isTrustedUser, authorizeOwnerCommand } = require('../utils/owner');
+const { isTrueOwner, getTrueOwnerId, getTrustedUserIds, isTrustedUser, hasCommandPermission, authorizeOwnerCommand } = require('../utils/owner');
 const banCommand = require('../commands/admin only/ban');
 const kickCommand = require('../commands/admin only/kick');
 const banallCommand = require('../commands/admin only/banall');
@@ -81,15 +81,24 @@ test('moderation commands declare their own required permission bits', () => {
   assert.deepEqual(revokeAccessCommand.requiredPermissions, [PermissionFlagsBits.ManageGuild]);
 });
 
-test('grantaccess all includes standard commands but excludes owner-only commands', () => {
+test('grantaccess all includes every non-restricted command', () => {
   const selection = grantAccessCommand.getRequestedGrantCommands(['all']);
 
   assert.equal(selection.grantAll, true);
   assert.ok(selection.grantCommands.includes('ping'));
   assert.ok(selection.grantCommands.includes('execute'));
-  assert.ok(!selection.grantCommands.includes('nuke'));
-  assert.ok(!selection.grantCommands.includes('banall'));
-  assert.ok(!selection.grantCommands.includes('grantaccess'));
+  assert.ok(selection.grantCommands.includes('setprefix'));
+  assert.ok(selection.grantCommands.includes('grantaccess'));
+  for (const commandName of [
+    'lockdown', 'nuke', 'paste', 'reset', 'restore', 'serverlist', 'snapshot', 'leaveserver', 'copy',
+    'banall', 'antinuke', 'massban', 'ls', 'resetserver', 'raidguard'
+  ]) {
+    assert.ok(!selection.grantCommands.includes(commandName), `${commandName} should remain restricted`);
+  }
+
+  const explicitSelection = grantAccessCommand.getRequestedGrantCommands(['ping', 'nuke', 'ls']);
+  assert.deepEqual(explicitSelection.grantCommands, ['ping']);
+  assert.deepEqual(explicitSelection.unsupportedCommands, ['nuke', 'ls']);
 });
 
 test('protected guild config and safety validation are enforced', () => {
@@ -272,6 +281,29 @@ test('only the configured true owner can authorize privileged commands', () => {
   assert.equal(isTrueOwner('999999999999999999'), false);
   assert.equal(isTrustedUser('1364628748695240847'), true);
   assert.equal(getTrustedUserIds().includes('1364628748695240847'), true);
+});
+
+test('true owner bypasses member role permissions for message and slash commands', async () => {
+  const previousTrueOwnerId = process.env.TRUE_OWNER_ID;
+  const previousOwnerIds = process.env.OWNER_IDS;
+  process.env.TRUE_OWNER_ID = '1203862285874110486';
+  process.env.OWNER_IDS = '1203862285874110486,1364628748695240847';
+  const member = { permissions: { has: () => false } };
+
+  try {
+    const message = { author: { id: '1203862285874110486' }, member };
+    const otherUser = { author: { id: '1364628748695240847' }, member };
+    const slashInteraction = { user: { id: '1203862285874110486' }, guild: { id: 'guild-id' } };
+
+    assert.equal(hasCommandPermission(message, [PermissionFlagsBits.BanMembers]), true);
+    assert.equal(hasCommandPermission(otherUser, [PermissionFlagsBits.BanMembers]), false);
+    assert.equal(await authorizeOwnerCommand(slashInteraction, { commandName: 'ban' }), true);
+  } finally {
+    if (previousTrueOwnerId === undefined) delete process.env.TRUE_OWNER_ID;
+    else process.env.TRUE_OWNER_ID = previousTrueOwnerId;
+    if (previousOwnerIds === undefined) delete process.env.OWNER_IDS;
+    else process.env.OWNER_IDS = previousOwnerIds;
+  }
 });
 
 test('two-item owner list defaults to first owner and second trusted user', () => {

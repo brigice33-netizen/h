@@ -1,5 +1,5 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const { authorizeOwnerCommand, getOwnerIds } = require('../../utils/owner');
+const { authorizeOwnerCommand, getOwnerIds, hasCommandPermission } = require('../../utils/owner');
 const { getProtectedGuildIds } = require('../../utils/safety');
 
 const CONFIRMATION = 'CONFIRM';
@@ -40,7 +40,7 @@ module.exports = {
       return;
     }
 
-    if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) {
+    if (!hasCommandPermission(message, [PermissionFlagsBits.BanMembers])) {
       return message.reply('❌ You do not have permission to ban members.');
     }
 
