@@ -19,6 +19,7 @@ const { validateBotSafetyConfig, getProtectedGuildIds } = require('./utils/safet
 const { findBannedImage, isImageAttachment } = require('./utils/imageBan');
 const { isBotCommandAllowedWhileDisabled, isCoinEconomyEnabled, isCoinCommandAllowedWhileDisabled } = require('./utils/commandAccess');
 const { handleTicketInteraction } = require('./utils/ticketSystem');
+const { handleChannelCategoryRequest } = require('./utils/channelMention');
 const { startDashboard } = require('./dashboard');
 const { COIN_DROP_CHANCE } = require('./utils/baitDrops');
 
@@ -1136,6 +1137,10 @@ client.on('messageCreate', async (message) => {
   }
 
   if (await handleAntiRaidMessage(message)) {
+    return;
+  }
+
+  if (client.enabled && await handleChannelCategoryRequest(message, client)) {
     return;
   }
 

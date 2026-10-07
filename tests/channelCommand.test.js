@@ -5,6 +5,8 @@ const channelCommand = require('../commands/channel');
 const slashSchemas = require('../utils/slashCommandSchemas');
 const { buildApplicationCommand } = require('../utils/applicationCommands');
 const { isTrueOwner } = require('../utils/owner');
+const { handleChannelCategoryRequest } = require('../utils/channelMention');
+const { ChannelType } = require('discord.js');
 
 test('channel command exposes create and rename actions with cr and cc aliases', () => {
   assert.equal(channelCommand.name, 'channel');
@@ -99,4 +101,72 @@ test('cc alias creates a text channel without requiring the true owner to have a
   assert.equal(created[0].name, 'my-channel');
   assert.equal(created[0].type, require('discord.js').ChannelType.GuildText);
   assert.match(replies[0], /Created text channel/);
+});
+
+test('bot mention moves a channel into a category for the true owner without member permissions', async () => {
+  const previousTrueOwnerId = process.env.TRUE_OWNER_ID;
+  process.env.TRUE_OWNER_ID = 'true-owner-id';
+  const moved = [];
+  const replies = [];
+  const channel = {
+    id: '123456789012345678',
+    name: 'general',
+    type: ChannelType.GuildText,
+    setParent: async (categoryId, options) => moved.push({ categoryId, options })
+  };
+  const category = { id: 'category-id', name: 'Community', type: ChannelType.GuildCategory };
+  const channels = new Map([[channel.id, channel], [category.id, category]]);
+  channels.find = (predicate) => [...channels.values()].find(predicate);
+  const message = {
+    content: '<@!bot-id> put <#123456789012345678> in Community',
+    author: { id: 'true-owner-id', tag: 'Owner' },
+    guild: {
+      channels: { cache: channels },
+      members: { me: { permissions: { has: () => true } } }
+    },
+    member: { permissions: { has: () => false } },
+    reply: async (content) => replies.push(content)
+  };
+
+  try {
+    const handled = await handleChannelCategoryRequest(message, { user: { id: 'bot-id' } });
+    assert.equal(handled, true);
+  } finally {
+    if (previousTrueOwnerId === undefined) delete process.env.TRUE_OWNER_ID;
+    else process.env.TRUE_OWNER_ID = previousTrueOwnerId;
+  }
+
+  assert.equal(moved[0].categoryId, 'category-id');
+  assert.equal(moved[0].options.lockPermissions, false);
+  assert.match(replies[0], /Moved <#123456789012345678> into \*\*Community\*\*/);
+});
+
+test('bot mention does not let a user without Manage Channels move channels', async () => {
+  const replies = [];
+  let moved = false;
+  const channel = {
+    id: '123456789012345678',
+    name: 'general',
+    type: ChannelType.GuildText,
+    setParent: async () => { moved = true; }
+  };
+  const category = { id: 'category-id', name: 'Community', type: ChannelType.GuildCategory };
+  const channels = new Map([[channel.id, channel], [category.id, category]]);
+  channels.find = (predicate) => [...channels.values()].find(predicate);
+  const message = {
+    content: '<@bot-id> put <#123456789012345678> in Community',
+    author: { id: 'regular-user' },
+    guild: {
+      channels: { cache: channels },
+      members: { me: { permissions: { has: () => true } } }
+    },
+    member: { permissions: { has: () => false } },
+    reply: async (content) => replies.push(content)
+  };
+
+  const handled = await handleChannelCategoryRequest(message, { user: { id: 'bot-id' } });
+
+  assert.equal(handled, true);
+  assert.equal(moved, false);
+  assert.match(replies[0], /need the Manage Channels permission/);
 });
