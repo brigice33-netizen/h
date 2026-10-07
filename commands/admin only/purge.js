@@ -1,4 +1,4 @@
-const { EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
+const { AttachmentBuilder, EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const { authorizeOwnerCommand } = require('../../utils/owner');
 
 const MAX_PURGE_COUNT = 10000;
@@ -17,13 +17,15 @@ function parseCount(value) {
 async function deleteMessagesInBatches(channel, count) {
   let remaining = count;
   let deletedTotal = 0;
+  const deletedMessages = [];
 
   while (remaining > 0) {
     const batchSize = Math.min(remaining, 100);
 
     try {
-      const deletedMessages = await channel.bulkDelete(batchSize, true);
-      const deletedCount = deletedMessages?.size || 0;
+      const deletedBatch = await channel.bulkDelete(batchSize, true);
+      const deletedCount = deletedBatch?.size || 0;
+      deletedMessages.push(...Array.from(deletedBatch?.values?.() || []));
       deletedTotal += deletedCount;
       remaining -= deletedCount;
 
@@ -45,6 +47,7 @@ async function deleteMessagesInBatches(channel, count) {
       for (const message of messageList) {
         if (!message?.deletable) continue;
         await message.delete().catch(() => {});
+        deletedMessages.push(message);
         manualDeleted += 1;
       }
 
@@ -57,7 +60,23 @@ async function deleteMessagesInBatches(channel, count) {
     }
   }
 
-  return deletedTotal;
+  return { deletedCount: deletedTotal, deletedMessages };
+}
+
+function buildPurgeTranscript(messages) {
+  if (!messages.length) {
+    return 'Message contents were unavailable from Discord\'s deletion response.\n';
+  }
+
+  return messages.map((message) => {
+    const author = message.author?.tag || message.author?.username || message.author?.id || 'Unknown author';
+    const timestamp = message.createdAt?.toISOString?.()
+      || (message.createdTimestamp ? new Date(message.createdTimestamp).toISOString() : 'Unknown time');
+    const content = String(message.content || '').trim() || '[No text content]';
+    const attachmentUrls = Array.from(message.attachments?.values?.() || []).map((attachment) => attachment.url).filter(Boolean);
+    const attachmentText = attachmentUrls.length ? `\nAttachments:\n${attachmentUrls.join('\n')}` : '';
+    return `[${timestamp}] ${author} (${message.author?.id || 'unknown ID'})\n${content}${attachmentText}`;
+  }).join('\n\n---\n\n');
 }
 
 async function sendResponse(target, payload) {
@@ -119,6 +138,7 @@ module.exports = {
   description: 'Bulk delete recent messages from a channel',
   usage: `~purge <1-${MAX_PURGE_COUNT}>`,
   deleteMessagesInBatches,
+  buildPurgeTranscript,
   sendResponse,
   data: new SlashCommandBuilder()
     .setName('purge')
@@ -185,14 +205,15 @@ module.exports = {
     }
 
     try {
-      const deletedMessagesCount = await deleteMessagesInBatches(target.channel, count);
+      const { deletedCount, deletedMessages } = await deleteMessagesInBatches(target.channel, count);
       const embed = new EmbedBuilder()
         .setColor('#F59E0B')
         .setTitle('🧹 Channel Purged')
-        .setDescription(`Deleted **${deletedMessagesCount}** recent messages.`)
+        .setDescription(`Deleted **${deletedCount}** recent messages. Their contents are attached.`)
         .setTimestamp();
+      const transcript = new AttachmentBuilder(Buffer.from(buildPurgeTranscript(deletedMessages), 'utf8'), { name: 'purged-messages.txt' });
 
-      return sendResponse(target, { embeds: [embed] });
+      return sendResponse(target, { embeds: [embed], files: [transcript] });
     } catch (error) {
       console.error('Failed to purge messages:', error);
       return sendResponse(target, '❌ Failed to purge messages.');

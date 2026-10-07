@@ -20,7 +20,7 @@ const schemas = {
   ban: [user('user', 'Member to ban'), text('reason', 'Reason for the ban', false)],
   banall: [text('guild_id', 'ID of the server to ban'), text('reason', 'Reason for the mass ban'), confirm()],
   bot: [choice('action', 'Bot action', ['enable', 'disable', 'status', 'shutdown'])],
-  channel: [choice('action', 'Channel action', ['rename']), text('name', 'New channel name')],
+  channel: [choice('action', 'Channel action', ['create', 'rename']), text('name', 'Channel name')],
   coin: [choice('action', 'Coin action', ['enable', 'disable', 'status'])],
   give: [user('user', 'Member receiving the reward'), choice('type', 'Reward type', ['containers', 'bounty', 'bait']), text('value', 'Bait type or amount'), integer('amount', 'Amount for the reward', false, 1)],
   givebounty: [user('user', 'Member receiving bounty', false), text('amount', 'Bounty amount, such as 1000, 1.5k, or 2m')],

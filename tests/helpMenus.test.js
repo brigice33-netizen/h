@@ -11,7 +11,7 @@ const banallCommand = require('../commands/admin only/banall');
 const disableCommand = require('../commands/admin only/disable');
 const grantAccessCommand = require('../commands/admin only/grantaccess');
 const revokeAccessCommand = require('../commands/admin only/revokeaccess');
-const { deleteMessagesInBatches, sendResponse, execute: executePurge } = require('../commands/admin only/purge');
+const { deleteMessagesInBatches, buildPurgeTranscript, sendResponse, execute: executePurge } = require('../commands/admin only/purge');
 const { deleteAllMessages } = require('../commands/admin only/nuke');
 const balanceCommand = require('../commands/onepiece fun/coins');
 const coinToggleCommand = require('../commands/admin only/coin');
@@ -143,7 +143,9 @@ test('purge falls back to individual deletions when bulk delete hits the 14-day 
   };
 
   const deleted = await deleteMessagesInBatches(channel, 2);
-  assert.equal(deleted, 2);
+  assert.equal(deleted.deletedCount, 2);
+  assert.deepEqual(deleted.deletedMessages, [messageA, messageB]);
+  assert.match(buildPurgeTranscript(deleted.deletedMessages), /No text content/);
 });
 
 test('purge sends the result to the channel when its command message was deleted', async () => {
@@ -173,11 +175,17 @@ test('purge sends its success response to the channel if the command message was
   process.env.OWNER_IDS = '123456789012345678';
 
   const sent = [];
+  const deletedMessage = {
+    author: { id: 'author-id', tag: 'TestUser#1234' },
+    createdAt: new Date('2026-10-07T12:00:00.000Z'),
+    content: 'Deleted message body',
+    attachments: new Map()
+  };
   const message = {
     author: { id: '123456789012345678' },
     guild: { id: 'guild-id', members: { me: { permissions: { has: () => true } } } },
     channel: {
-      bulkDelete: async () => ({ size: 1 }),
+      bulkDelete: async () => new Map([['message-id', deletedMessage]]),
       send: async (payload) => {
         sent.push(payload);
         return payload;
@@ -201,6 +209,9 @@ test('purge sends its success response to the channel if the command message was
 
   assert.equal(sent.length, 1);
   assert.equal(sent[0].embeds[0].data.title, '🧹 Channel Purged');
+  assert.equal(sent[0].files.length, 1);
+  assert.match(sent[0].files[0].attachment.toString(), /TestUser#1234/);
+  assert.match(sent[0].files[0].attachment.toString(), /Deleted message body/);
 });
 
 test('nuke falls back to individual deletions when bulk delete hits the 14-day limit', async () => {
