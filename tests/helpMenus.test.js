@@ -11,7 +11,7 @@ const banallCommand = require('../commands/admin only/banall');
 const disableCommand = require('../commands/admin only/disable');
 const grantAccessCommand = require('../commands/admin only/grantaccess');
 const revokeAccessCommand = require('../commands/admin only/revokeaccess');
-const { deleteMessagesInBatches, buildPurgeTranscript, sendResponse, execute: executePurge } = require('../commands/admin only/purge');
+const { deleteMessagesInBatches, deleteFilteredMessages, parseAuthorFilter, data: purgeSlashCommand, buildPurgeTranscript, sendResponse, execute: executePurge } = require('../commands/admin only/purge');
 const { deleteAllMessages } = require('../commands/admin only/nuke');
 const balanceCommand = require('../commands/onepiece fun/coins');
 const coinToggleCommand = require('../commands/admin only/coin');
@@ -146,6 +146,43 @@ test('purge falls back to individual deletions when bulk delete hits the 14-day 
   assert.equal(deleted.deletedCount, 2);
   assert.deepEqual(deleted.deletedMessages, [messageA, messageB]);
   assert.match(buildPurgeTranscript(deleted.deletedMessages), /No text content/);
+});
+
+test('purge author filters accept bot and user selectors', () => {
+  assert.equal(parseAuthorFilter('bot'), 'bots');
+  assert.equal(parseAuthorFilter('bots'), 'bots');
+  assert.equal(parseAuthorFilter('user'), 'users');
+  assert.equal(parseAuthorFilter('users'), 'users');
+  assert.equal(parseAuthorFilter(undefined), 'all');
+  assert.equal(parseAuthorFilter('unknown'), null);
+});
+
+test('purge slash command offers all, bot, and user author choices', () => {
+  const authorOption = purgeSlashCommand.toJSON().options.find((option) => option.name === 'author');
+  assert.deepEqual(authorOption.choices.map((choice) => choice.value), ['all', 'bots', 'users']);
+});
+
+test('purge deletes only messages matching the selected author filter', async () => {
+  const botMessage = { id: 'bot-message', author: { bot: true } };
+  const userMessage = { id: 'user-message', author: { bot: false } };
+  let deletedMessages;
+  const channel = {
+    bulkDelete: async (messages) => {
+      deletedMessages = messages;
+      return new Map(messages.map((message) => [message.id, message]));
+    },
+    messages: {
+      fetch: async () => new Map([
+        [botMessage.id, botMessage],
+        [userMessage.id, userMessage]
+      ])
+    }
+  };
+
+  const deleted = await deleteFilteredMessages(channel, 1, 'bots');
+  assert.deepEqual(deletedMessages, [botMessage]);
+  assert.deepEqual(deleted.deletedMessages, [botMessage]);
+  assert.equal(deleted.deletedCount, 1);
 });
 
 test('purge sends the result to the channel when its command message was deleted', async () => {
