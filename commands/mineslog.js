@@ -1,7 +1,7 @@
 const { PermissionFlagsBits } = require('discord.js');
 const { getConfig, setConfig } = require('../database');
 const { hasCommandPermission } = require('../utils/owner');
-const { getMineLogConfigKey, isMineLoggingEnabled } = require('../utils/mineLogger');
+const { getMineLogConfigKey, isMineLoggingEnabled, ensureMineLogChannel } = require('../utils/mineLogger');
 
 module.exports = {
   name: 'mineslog',
@@ -29,11 +29,17 @@ module.exports = {
       }
 
       const enabled = action === 'on' || action === 'enable';
-      await setConfig(configKey, enabled ? 'true' : 'false');
-      return message.reply(`Owo Mines logging is now **${enabled ? 'enabled' : 'disabled'}** in this server.`);
+      if (enabled) {
+        const logChannel = await ensureMineLogChannel(message.guild);
+        await setConfig(configKey, 'true');
+        return message.reply(`Owo Mines logging is now **enabled** in this server. Logs will go to ${logChannel}.`);
+      }
+
+      await setConfig(configKey, 'false');
+      return message.reply('Owo Mines logging is now **disabled** in this server.');
     } catch (error) {
       console.error(`Failed to update Owo Mines logging for guild ${message.guild.id}:`, error);
-      return message.reply('Failed to update Owo Mines logging. Please try again later.');
+      return message.reply('Failed to update Owo Mines logging. Make sure I have Manage Channels and can view and send messages in `#mine-logs`, then try again.');
     }
   }
 };

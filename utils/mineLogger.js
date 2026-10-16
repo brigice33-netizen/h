@@ -112,5 +112,6 @@ module.exports = {
   isOwoMinesMessage,
   getMineBoardText,
   buildMineLogPayload,
+  ensureMineLogChannel,
   handleMineLogMessage
 };
