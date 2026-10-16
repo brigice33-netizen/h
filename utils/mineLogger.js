@@ -1,6 +1,7 @@
 const { ChannelType } = require('discord.js');
 const { getConfig } = require('../database');
 
+const OWO_APPLICATION_ID = '408785106942164992';
 const MINE_LOG_CHANNEL_NAME = 'mine-logs';
 const MINE_LOG_CONFIG_PREFIX = 'mineslog:';
 const MINE_LOG_SOURCE_CONFIG_PREFIX = 'mineslog:source:';
@@ -39,9 +40,9 @@ function isOwoMinesMessage(message) {
   const authorName = `${message.author.username || ''} ${message.author.globalName || ''}`.toLowerCase();
   if (!/\bmines?\b/i.test(getMessageText(message))) return false;
 
-  // The configured source channel plus a 3x3 game board identifies the game
-  // even if Discord exposes an unexpected app display name for OwO.
-  return authorName.includes('owo') || Boolean(getMineBoardText(message));
+  const isOwoApplication = String(message.applicationId || '') === OWO_APPLICATION_ID
+    || String(message.author.id || '') === OWO_APPLICATION_ID;
+  return isOwoApplication || authorName.includes('owo') || Boolean(getMineBoardText(message));
 }
 
 function getMineBoardText(message) {
@@ -119,6 +120,7 @@ async function handleMineLogMessage(message, { readConfig = getConfig } = {}) {
 }
 
 module.exports = {
+  OWO_APPLICATION_ID,
   MINE_LOG_CHANNEL_NAME,
   getMineLogConfigKey,
   getMineLogSourceConfigKey,

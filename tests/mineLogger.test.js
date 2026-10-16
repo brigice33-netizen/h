@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   MINE_LOG_CHANNEL_NAME,
+  OWO_APPLICATION_ID,
   getMineLogConfigKey,
   getMineLogSourceConfigKey,
   isMineLoggingEnabled,
@@ -60,6 +61,22 @@ test('mine logger recognizes a Mines board even when Discord exposes a different
       { components: [4, 5, 6].map((n) => ({ type: 2, emoji: { name: `tile${n}` } })) },
       { components: [7, 8, 9].map((n) => ({ type: 2, emoji: { name: `tile${n}` } })) }
     ]
+  });
+
+  test('mine logger recognizes OwO by application ID when Discord uses an unexpected name', () => {
+    const message = makeMessage({
+      applicationId: OWO_APPLICATION_ID,
+      author: { id: 'bot-id', bot: true, username: 'Unknown App' },
+      content: 'Mines game complete',
+      components: []
+    });
+
+    assert.equal(isOwoMinesMessage(message), true);
+    assert.equal(isOwoMinesMessage({
+      ...message,
+      applicationId: 'other-app-id',
+      author: { ...message.author, id: 'other-bot-id' }
+    }), false);
   });
 
   assert.equal(isOwoMinesMessage(message), true);
