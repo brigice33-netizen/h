@@ -24,6 +24,8 @@ function getMessageText(message) {
     .flatMap((embed) => [
       embed.title,
       embed.description,
+      embed.author?.name,
+      embed.footer?.text,
       ...(embed.fields || []).flatMap((field) => [field.name, field.value])
     ])
     .filter(Boolean)
@@ -35,7 +37,11 @@ function isOwoMinesMessage(message) {
   if (!message?.guild || !message.author?.bot) return false;
 
   const authorName = `${message.author.username || ''} ${message.author.globalName || ''}`.toLowerCase();
-  return authorName.includes('owo') && /\bmines?\b/i.test(getMessageText(message));
+  if (!/\bmines?\b/i.test(getMessageText(message))) return false;
+
+  // The configured source channel plus a 3x3 game board identifies the game
+  // even if Discord exposes an unexpected app display name for OwO.
+  return authorName.includes('owo') || Boolean(getMineBoardText(message));
 }
 
 function getMineBoardText(message) {

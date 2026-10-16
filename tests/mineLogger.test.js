@@ -46,6 +46,30 @@ test('mine logger ignores non-Owo messages and unrelated Owo messages', () => {
   assert.equal(isOwoMinesMessage(makeMessage({ author: { bot: true, username: 'OtherBot' } })), false);
 });
 
+test('mine logger recognizes a Mines board even when Discord exposes a different app name', () => {
+  const message = makeMessage({
+    author: { bot: true, username: 'Unknown App' },
+    content: '',
+    embeds: [{
+      title: 'started a mines game',
+      description: '',
+      fields: [{ name: 'Bet', value: '10' }, { name: 'Mines', value: '3' }]
+    }],
+    components: [
+      { components: [1, 2, 3].map((n) => ({ type: 2, emoji: { name: `tile${n}` } })) },
+      { components: [4, 5, 6].map((n) => ({ type: 2, emoji: { name: `tile${n}` } })) },
+      { components: [7, 8, 9].map((n) => ({ type: 2, emoji: { name: `tile${n}` } })) }
+    ]
+  });
+
+  assert.equal(isOwoMinesMessage(message), true);
+  assert.equal(isOwoMinesMessage(makeMessage({
+    author: { bot: true, username: 'Unknown App' },
+    content: '',
+    embeds: [{ fields: [{ name: 'Mines', value: '3' }] }]
+  })), false);
+});
+
 test('mine log payload links to the source and suppresses mentions', () => {
   const payload = buildMineLogPayload(makeMessage());
 
