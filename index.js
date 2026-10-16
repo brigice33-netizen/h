@@ -22,6 +22,7 @@ const { handleTicketInteraction } = require('./utils/ticketSystem');
 const { handleChannelCategoryRequest } = require('./utils/channelMention');
 const { startDashboard } = require('./dashboard');
 const { COIN_DROP_CHANCE } = require('./utils/baitDrops');
+const { handleMineLogMessage } = require('./utils/mineLogger');
 
 const safetyCheck = validateBotSafetyConfig(process.env);
 if (!safetyCheck.ok) {
@@ -1062,6 +1063,7 @@ async function handleBannedImage(message) {
 }
 
 client.on('messageUpdate', async (oldMessage, newMessage) => {
+  await handleMineLogMessage(newMessage);
   if (!newMessage.guild || newMessage.author?.bot) return;
   const oldContent = String(oldMessage.content || '');
   const newContent = String(newMessage.content || '');
@@ -1085,6 +1087,7 @@ client.on('messageDeleteBulk', async (messages) => {
 
 // Handle prefix commands
 client.on('messageCreate', async (message) => {
+  await handleMineLogMessage(message);
   const rawContent = String(message.content || '').trim();
   const prefix = String(client.prefix || process.env.PREFIX || '!').trim();
   const isCommand = Boolean(prefix) && rawContent.startsWith(prefix);
