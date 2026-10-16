@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {
   MINE_LOG_CHANNEL_NAME,
   getMineLogConfigKey,
+  getMineLogSourceConfigKey,
   isMineLoggingEnabled,
   isOwoMinesMessage,
   getMineBoardText,
@@ -31,6 +32,7 @@ test('mine logger recognizes Owo Mines messages', () => {
 
 test('mine logger is disabled until explicitly enabled per guild', () => {
   assert.equal(getMineLogConfigKey('guild-123'), 'mineslog:guild-123');
+  assert.equal(getMineLogSourceConfigKey('guild-123'), 'mineslog:source:guild-123');
   assert.equal(isMineLoggingEnabled(null), false);
   assert.equal(isMineLoggingEnabled('false'), false);
   assert.equal(isMineLoggingEnabled('true'), true);
@@ -85,6 +87,30 @@ test('mine logger does not create a channel or log before the guild enables it',
   assert.equal(createCount, 0);
 });
 
+test('mine logger ignores games outside the configured source channel', async () => {
+  let createCount = 0;
+  const message = makeMessage({
+    channel: { id: 'wrong-channel', name: 'games' },
+    guild: {
+      id: 'guild-123',
+      channels: {
+        cache: { find: () => null },
+        create: async () => {
+          createCount += 1;
+        }
+      }
+    }
+  });
+  const readConfig = async (key) => {
+    if (key === getMineLogConfigKey('guild-123')) return 'true';
+    if (key === getMineLogSourceConfigKey('guild-123')) return 'mines-channel';
+    return null;
+  };
+
+  assert.equal(await handleMineLogMessage(message, { readConfig }), false);
+  assert.equal(createCount, 0);
+});
+
 test('mine logger creates the log channel and updates its entry when the source message changes', async () => {
   const channels = new Map();
   const sentPayloads = [];
@@ -123,14 +149,21 @@ test('mine logger creates the log channel and updates its entry when the source 
   });
 
   const readConfig = async () => 'true';
-  assert.equal(await handleMineLogMessage(message, { readConfig }), true);
+  const channelId = 'games-channel';
+  message.guild.id = 'guild-123';
+  message.channel.id = channelId;
+  const sourceAwareReadConfig = async (key) => {
+    if (key === getMineLogSourceConfigKey('guild-123')) return channelId;
+    return readConfig();
+  };
+  assert.equal(await handleMineLogMessage(message, { readConfig: sourceAwareReadConfig }), true);
   assert.equal(createdChannelCount, 1);
   assert.equal(channels.has(MINE_LOG_CHANNEL_NAME), true);
   assert.equal(sentPayloads.length, 1);
 
   message.content = '💎 <@123> cashed out! **Mines**: `3` **Winnings**: `45,119`';
   message.components[2].components[1].emoji.name = 'revealed';
-  assert.equal(await handleMineLogMessage(message, { readConfig }), true);
+  assert.equal(await handleMineLogMessage(message, { readConfig: sourceAwareReadConfig }), true);
   assert.equal(createdChannelCount, 1);
   assert.equal(editedPayloads.length, 1);
   assert.match(editedPayloads[0].content, /45,119/);

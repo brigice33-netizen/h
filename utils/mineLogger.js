@@ -3,11 +3,16 @@ const { getConfig } = require('../database');
 
 const MINE_LOG_CHANNEL_NAME = 'mine-logs';
 const MINE_LOG_CONFIG_PREFIX = 'mineslog:';
+const MINE_LOG_SOURCE_CONFIG_PREFIX = 'mineslog:source:';
 const loggedMessages = new Map();
 const MAX_CACHED_LOG_MESSAGES = 500;
 
 function getMineLogConfigKey(guildId) {
   return `${MINE_LOG_CONFIG_PREFIX}${guildId}`;
+}
+
+function getMineLogSourceConfigKey(guildId) {
+  return `${MINE_LOG_SOURCE_CONFIG_PREFIX}${guildId}`;
 }
 
 function isMineLoggingEnabled(value) {
@@ -83,6 +88,8 @@ async function handleMineLogMessage(message, { readConfig = getConfig } = {}) {
   try {
     const loggingEnabled = await readConfig(getMineLogConfigKey(message.guild.id));
     if (!isMineLoggingEnabled(loggingEnabled)) return false;
+    const sourceChannelId = await readConfig(getMineLogSourceConfigKey(message.guild.id));
+    if (!sourceChannelId || message.channel?.id !== sourceChannelId) return false;
 
     const channel = await ensureMineLogChannel(message.guild);
     const payload = buildMineLogPayload(message);
@@ -108,6 +115,7 @@ async function handleMineLogMessage(message, { readConfig = getConfig } = {}) {
 module.exports = {
   MINE_LOG_CHANNEL_NAME,
   getMineLogConfigKey,
+  getMineLogSourceConfigKey,
   isMineLoggingEnabled,
   isOwoMinesMessage,
   getMineBoardText,
