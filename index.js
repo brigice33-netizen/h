@@ -54,6 +54,7 @@ const antiNukeState = new Map();
 const antiNukeFallbackState = new Map();
 const antiSpamState = new Map();
 const antiJoinState = new Map();
+const imageBanDeletionReasons = new Map();
 const alivePresenceRotatorMs = 60 * 1000;
 let alivePresenceIndex = 0;
 const specialPingUserId = '1203862285874110486';
@@ -1062,10 +1063,21 @@ async function handleBannedImage(message) {
 
       await message.member.roles.add(hazardousRole, `Matched banned image #${bannedImage.id}`);
       if (message.deletable) {
-        await message.delete().catch(() => {});
-        await sendAuditLog(message.guild, 'Image deleted and member isolated', `${message.author} matched banned image #${bannedImage.id}.\nImage: ${attachment.url}`, '#D32F2F');
+        imageBanDeletionReasons.set(message.id, {
+          deletedBy: `${client.user?.tag || 'Bot'} (automated image-ban enforcement)`,
+          reason: bannedImage.reason || 'Matched a banned image with no stored reason.'
+        });
+        if (imageBanDeletionReasons.size > 500) {
+          imageBanDeletionReasons.delete(imageBanDeletionReasons.keys().next().value);
+        }
+        try {
+          await message.delete();
+        } catch (error) {
+          imageBanDeletionReasons.delete(message.id);
+          throw error;
+        }
       }
-      await sendMessageReply(message, `⚠️ ${message.author} was given the Hazardous role because the uploaded image matched banned image #${bannedImage.id}.`).catch(() => {});
+      await sendMessageReply(message, `⚠️ ${message.author} was given the Hazardous role because the uploaded image matched banned image #${bannedImage.id}. Reason: ${bannedImage.reason || 'No reason recorded.'}`).catch(() => {});
       return true;
     } catch (error) {
       console.error('Failed to check image against banned images:', error);
@@ -1073,6 +1085,28 @@ async function handleBannedImage(message) {
   }
 
   return false;
+}
+
+async function findMessageDeletionExecutor(message, auditType = AuditLogEvent.MessageDelete) {
+  const guild = message?.guild;
+  if (!guild?.fetchAuditLogs || !message.channel?.id) return null;
+
+  try {
+    const auditLogs = await guild.fetchAuditLogs({ type: auditType, limit: 10 });
+    const now = Date.now();
+    const entry = auditLogs.entries.find((candidate) => {
+      const sameChannel = candidate.extra?.channel?.id === message.channel.id;
+      const recent = now - candidate.createdTimestamp <= 15000;
+      if (!sameChannel || !recent) return false;
+      if (auditType === AuditLogEvent.MessageBulkDelete) return true;
+      return Boolean(message.author?.id) && candidate.target?.id === message.author.id;
+    });
+    if (!entry?.executor) return null;
+    return `${entry.executor.tag || entry.executor.username || entry.executor.id} (\`${entry.executor.id}\`)`;
+  } catch (error) {
+    console.error(`Failed to resolve message deletion actor in guild ${guild.id}:`, error);
+    return null;
+  }
 }
 
 client.on('messageUpdate', async (oldMessage, newMessage) => {
@@ -1088,14 +1122,25 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
 
 client.on('messageDelete', async (message) => {
   if (!message.guild) return;
-  await sendAuditLog(message.guild, 'Message deleted', formatDeletedMessageDetails(message), '#ED4245');
+  const imageBan = imageBanDeletionReasons.get(message.id);
+  imageBanDeletionReasons.delete(message.id);
+  const deletedBy = imageBan?.deletedBy || await findMessageDeletionExecutor(message);
+  await sendAuditLog(
+    message.guild,
+    imageBan ? 'Image-ban message deleted' : 'Message deleted',
+    formatDeletedMessageDetails(message, { deletedBy, reason: imageBan?.reason }),
+    imageBan ? '#D32F2F' : '#ED4245'
+  );
 });
 
 client.on('messageDeleteBulk', async (messages) => {
   const firstMessage = messages.first();
   if (!firstMessage?.guild) return;
 
-  const messageDetails = [...messages.values()].map(formatDeletedMessageDetails);
+  const deletedBy = await findMessageDeletionExecutor(firstMessage, AuditLogEvent.MessageBulkDelete);
+  const messageDetails = [...messages.values()].map((message) => (
+    formatDeletedMessageDetails(message, { deletedBy })
+  ));
   const chunks = chunkLogLines(messageDetails);
   await sendAuditLog(
     firstMessage.guild,

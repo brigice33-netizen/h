@@ -16,28 +16,36 @@ test('deleted channel details identify voice channels and their IDs', () => {
     type: ChannelType.GuildVoice,
     name: 'Team Voice',
     id: 'voice-channel',
+    guild: { id: 'source-guild' },
     parent: { name: 'Games' }
   });
 
   assert.match(details, /Voice channel: Team Voice/);
   assert.match(details, /voice-channel/);
   assert.match(details, /Category: Games/);
+  assert.match(details, /\[Open channel\]\(https:\/\/discord\.com\/channels\/source-guild\/voice-channel\)/);
 });
 
 test('deleted message details include source channel, author, content, embeds, and attachments', () => {
   const details = formatDeletedMessageDetails({
+    id: 'deleted-message',
+    guild: { id: 'source-guild' },
     author: { tag: 'Member#1234' },
     channel: { type: ChannelType.GuildVoice, name: 'Team Voice', id: 'voice-channel' },
     content: 'deleted text',
     embeds: [{ title: 'Deleted embed', description: 'Embed body', fields: [] }],
     attachments: new Map([['file', { url: 'https://example.test/image.png' }]])
-  });
+  }, { deletedBy: 'Moderator#0001', reason: 'Image ban: prohibited image' });
 
   assert.match(details, /Author: Member#1234/);
+  assert.match(details, /Deleted by: Moderator#0001/);
+  assert.match(details, /Deletion reason: Image ban: prohibited image/);
   assert.match(details, /Voice channel: #Team Voice/);
   assert.match(details, /deleted text/);
   assert.match(details, /Deleted embed/);
   assert.match(details, /https:\/\/example\.test\/image\.png/);
+  assert.match(details, /\[Open channel\]\(https:\/\/discord\.com\/channels\/source-guild\/voice-channel\)/);
+  assert.match(details, /\[Jump to message\]\(https:\/\/discord\.com\/channels\/source-guild\/voice-channel\/deleted-message\)/);
 });
 
 test('bulk deleted-message details are chunked without dropping long entries', () => {

@@ -14,16 +14,26 @@ function formatDeletedChannelDetails(channel) {
         ? 'Text channel'
         : 'Channel';
   const parentName = channel.parent?.name || null;
+  const channelUrl = channel.guild?.id
+    ? `https://discord.com/channels/${channel.guild.id}/${channel.id}`
+    : null;
   return [
     `${channelKind}: ${channel.name || 'unknown'} (\`${channel.id}\`)`,
+    channelUrl ? `[Open channel](${channelUrl})` : null,
     parentName ? `Category: ${parentName}` : null
   ].filter(Boolean).join('\n');
 }
 
-function formatDeletedMessageDetails(message) {
+function formatDeletedMessageDetails(message, { deletedBy, reason } = {}) {
   const channel = message.channel;
   const channelKind = channel?.type === ChannelType.GuildVoice ? 'Voice channel' : 'Channel';
   const author = message.author?.tag || message.author?.username || message.authorId || 'Unknown user';
+  const channelUrl = message.guild?.id && channel?.id
+    ? `https://discord.com/channels/${message.guild.id}/${channel.id}`
+    : null;
+  const messageUrl = message.guild?.id && channel?.id && message.id
+    ? `${channelUrl}/${message.id}`
+    : null;
   const embeds = (message.embeds || []).map((embed) => [
     embed.title,
     embed.description,
@@ -35,7 +45,11 @@ function formatDeletedMessageDetails(message) {
 
   return [
     `Author: ${author}`,
+    `Deleted by: ${deletedBy || 'Unknown (Discord did not expose the actor)'}`,
+    reason ? `Deletion reason: ${reason}` : null,
     `${channelKind}: #${channel?.name || 'unknown'} (\`${channel?.id || 'unknown'}\`)`,
+    channelUrl ? `[Open channel](${channelUrl})` : null,
+    messageUrl ? `[Jump to message](${messageUrl})` : null,
     `Content:\n${String(message.content || '').trim() || '*empty or unavailable*'}`,
     embeds.length ? `Embeds:\n${embeds.join('\n\n')}` : null,
     attachments.length ? `Attachments:\n${attachments.join('\n')}` : null

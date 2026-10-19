@@ -1,6 +1,5 @@
 const { EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
-const { createImageHash, isImageAttachment } = require('../../utils/imageBan');
-const { addBannedImage, getBannedImages, removeBannedImage, getAuditLogs, setConfig } = require('../../database');
+const { getAuditLogs, setConfig } = require('../../database');
 const { ensureTicketLogChannel } = require('../../utils/ticketSystem');
 const { hasCommandPermission } = require('../../utils/owner');
 
@@ -55,15 +54,11 @@ async function ensureAutoRole(guild) {
   return role;
 }
 
-function getAttachment(message) {
-  return [...(message.attachments?.values?.() || [])].find(isImageAttachment);
-}
-
 module.exports = {
   name: 'mikuset',
-  aliases: ['imageban', 'bannedimage', 'hazardsetup', 'miku'],
+  aliases: ['hazardsetup', 'miku'],
   description: 'Set up hazardous image isolation and manage banned images',
-  usage: '~mikuset <setup|add|list|remove> [id] (attach an image for add)',
+  usage: '~mikuset <setup|autorole|logs>',
   requiredPermissions: [PermissionFlagsBits.ManageGuild, PermissionFlagsBits.ManageRoles, PermissionFlagsBits.ManageChannels],
 
   async execute(message, args = []) {
@@ -79,7 +74,7 @@ module.exports = {
       if (action === 'setup') {
         const { role, channel, logChannel } = await ensureHazardousSetup(message.guild);
         const autoRole = await ensureAutoRole(message.guild);
-        return message.reply({ embeds: [new EmbedBuilder().setColor('#D32F2F').setTitle('Miku protection ready').setDescription(`Hazardous role: <@&${role.id}>\nPrivate channel: ${channel}\nAudit logs: ${logChannel}\nAuto role: <@&${autoRole.id}>\nUse \`~mikuset add\` with an attached image to ban it.`)] });
+        return message.reply({ embeds: [new EmbedBuilder().setColor('#D32F2F').setTitle('Miku protection ready').setDescription(`Hazardous role: <@&${role.id}>\nPrivate channel: ${channel}\nAudit logs: ${logChannel}\nAuto role: <@&${autoRole.id}>\nUse \`~imageban add\` with an attached image and reason to ban it.`)] });
       }
 
       if (action === 'autorole') {
@@ -96,29 +91,6 @@ module.exports = {
         return message.reply(`Automatic member role set to ${autoRole}.`);
       }
 
-      if (action === 'add') {
-        const attachment = getAttachment(message);
-        if (!attachment) return message.reply('Attach an image to `mikuset add`.');
-        await ensureHazardousSetup(message.guild);
-        const response = await fetch(attachment.url);
-        if (!response.ok) return message.reply('I could not download that image.');
-        const imageHash = await createImageHash(Buffer.from(await response.arrayBuffer()));
-        const record = await addBannedImage(message.guild.id, attachment.url, imageHash, message.author.id);
-        return message.reply(`Banned image #${record.id} added. Similar uploads will receive the hazardous role.`);
-      }
-
-      const images = await getBannedImages(message.guild.id);
-      if (action === 'list') {
-        return message.reply(images.length ? images.map((image) => `#${image.id} - ${image.imageUrl}`).join('\n') : 'No banned images are configured.');
-      }
-
-      if (action === 'remove') {
-        const id = Number.parseInt(args[1], 10);
-        if (!Number.isInteger(id)) return message.reply('Provide the banned image id to remove.');
-        const removed = await removeBannedImage(message.guild.id, id);
-        return message.reply(removed ? `Removed banned image #${id}.` : 'That banned image was not found.');
-      }
-
       if (action === 'logs') {
         const logs = await getAuditLogs(message.guild.id, 20);
         if (!logs.length) return message.reply('No persisted audit logs found.');
@@ -126,7 +98,7 @@ module.exports = {
         return message.reply({ embeds: [new EmbedBuilder().setColor('#5865F2').setTitle('Recent Miku audit logs').setDescription(description)] });
       }
 
-      return message.reply('Usage: `~mikuset <setup|autorole|add|list|remove|logs> [role|id]`');
+      return message.reply('Usage: `~mikuset <setup|autorole|logs> [role]`. Use `~imageban` to manage banned images.');
     } catch (error) {
       console.error('Image ban setup failed:', error);
       return message.reply('Image ban setup failed. Check that I have Manage Roles and Manage Channels permissions.');

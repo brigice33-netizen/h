@@ -21,6 +21,39 @@ const db = new sqlite3.Database(dbPath, (err) => {
     console.log('Connected to SQLite database');
   }
 });
+let bannedImagesReasonMigration;
+
+function ensureBannedImagesReasonColumn() {
+  if (!bannedImagesReasonMigration) {
+    bannedImagesReasonMigration = new Promise((resolve, reject) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS banned_images (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          guildId TEXT NOT NULL,
+          imageUrl TEXT NOT NULL,
+          imageHash TEXT NOT NULL,
+          addedBy TEXT,
+          reason TEXT NOT NULL DEFAULT '',
+          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `, (createErr) => {
+        if (createErr) return reject(createErr);
+        db.all('PRAGMA table_info(banned_images)', [], (err, columns) => {
+          if (err) return reject(err);
+          if (columns.some((column) => column.name === 'reason')) return resolve();
+          db.run("ALTER TABLE banned_images ADD COLUMN reason TEXT NOT NULL DEFAULT ''", (alterErr) => {
+            if (alterErr) return reject(alterErr);
+            resolve();
+          });
+        });
+      });
+    }).catch((error) => {
+      bannedImagesReasonMigration = null;
+      throw error;
+    });
+  }
+  return bannedImagesReasonMigration;
+}
 
 function getRandomInteger(min, max) {
   const lower = Math.ceil(Number(min));
@@ -289,6 +322,7 @@ function initializeDatabase() {
         imageUrl TEXT NOT NULL,
         imageHash TEXT NOT NULL,
         addedBy TEXT,
+        reason TEXT NOT NULL DEFAULT '',
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -1288,26 +1322,38 @@ function deleteConfig(key) {
   });
 }
 
-function addBannedImage(guildId, imageUrl, imageHash, addedBy) {
-  return new Promise((resolve, reject) => {
+function addBannedImage(guildId, imageUrl, imageHash, addedBy, reason) {
+  return ensureBannedImagesReasonColumn().then(() => new Promise((resolve, reject) => {
     db.run(
-      'INSERT INTO banned_images (guildId, imageUrl, imageHash, addedBy) VALUES (?, ?, ?, ?)',
-      [guildId, imageUrl, imageHash, addedBy || null],
+      'INSERT INTO banned_images (guildId, imageUrl, imageHash, addedBy, reason) VALUES (?, ?, ?, ?, ?)',
+      [guildId, imageUrl, imageHash, addedBy || null, reason],
       function(err) {
         if (err) return reject(err);
-        resolve({ id: this.lastID, guildId, imageUrl, imageHash, addedBy: addedBy || null });
+        const id = this.lastID;
+        db.get('SELECT createdAt FROM banned_images WHERE id = ?', [id], (selectErr, row) => {
+          if (selectErr) return reject(selectErr);
+          resolve({
+            id,
+            guildId,
+            imageUrl,
+            imageHash,
+            addedBy: addedBy || null,
+            reason,
+            createdAt: row?.createdAt || null
+          });
+        });
       }
     );
-  });
+  }));
 }
 
 function getBannedImages(guildId) {
-  return new Promise((resolve, reject) => {
+  return ensureBannedImagesReasonColumn().then(() => new Promise((resolve, reject) => {
     db.all('SELECT * FROM banned_images WHERE guildId = ? ORDER BY id ASC', [guildId], (err, rows) => {
       if (err) return reject(err);
       resolve(rows || []);
     });
-  });
+  }));
 }
 
 function removeBannedImage(guildId, id) {
