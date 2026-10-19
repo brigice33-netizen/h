@@ -67,7 +67,7 @@ test('mine logger recognizes a Mines board even when Discord exposes a different
     const message = makeMessage({
       applicationId: OWO_APPLICATION_ID,
       author: { id: 'bot-id', bot: true, username: 'Unknown App' },
-      content: 'Mines game complete',
+      content: '',
       components: []
     });
 
@@ -77,6 +77,14 @@ test('mine logger recognizes a Mines board even when Discord exposes a different
       applicationId: 'other-app-id',
       author: { ...message.author, id: 'other-bot-id' }
     }), false);
+  });
+
+  test('mine logger ignores recognizable OwO cooldown responses', () => {
+    assert.equal(isOwoMinesMessage(makeMessage({
+      applicationId: OWO_APPLICATION_ID,
+      author: { id: 'bot-id', bot: true, username: 'Unknown App' },
+      content: 'Slow down and try the command again in 8 seconds'
+    })), false);
   });
 
   assert.equal(isOwoMinesMessage(message), true);

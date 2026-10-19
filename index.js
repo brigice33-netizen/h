@@ -1,6 +1,6 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
-const { Client, GatewayIntentBits, Collection, AuditLogEvent, ActivityType, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, AuditLogEvent, ActivityType, EmbedBuilder, ChannelType } = require('discord.js');
 const { PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const { getOwnerIds } = require('./utils/owner');
@@ -23,6 +23,12 @@ const { handleChannelCategoryRequest } = require('./utils/channelMention');
 const { startDashboard } = require('./dashboard');
 const { COIN_DROP_CHANCE } = require('./utils/baitDrops');
 const { handleMineLogMessage } = require('./utils/mineLogger');
+const {
+  sendGlobalAuditLog,
+  formatDeletedChannelDetails,
+  formatDeletedMessageDetails,
+  chunkLogLines
+} = require('./utils/globalLogger');
 
 const safetyCheck = validateBotSafetyConfig(process.env);
 if (!safetyCheck.ok) {
@@ -959,6 +965,8 @@ client.on('guildMemberRemove', async (member) => {
 
 client.on('channelDelete', async (channel) => {
   if (!channel.guild) return;
+  const channelKind = channel.type === ChannelType.GuildVoice ? 'Voice channel' : 'Channel';
+  await sendAuditLog(channel.guild, `${channelKind} deleted`, formatDeletedChannelDetails(channel), '#ED4245');
   await handleAntiNukeEvent(channel.guild, AuditLogEvent.ChannelDelete, channel.id, 'channel delete');
 });
 
@@ -1008,6 +1016,11 @@ async function sendAuditLog(guild, title, description, color = '#5865F2') {
   try {
     const safeDescription = shortenAuditText(description, 3900);
     await recordAuditLog(guild.id, title.toLowerCase().replace(/\s+/g, '_'), title, safeDescription);
+    try {
+      await sendGlobalAuditLog(client, guild, title, safeDescription, color);
+    } catch (error) {
+      console.error('Failed to write global audit log:', error);
+    }
     let channelId = await getConfig(`imageban:${guild.id}:logs`);
     let channel = channelId ? guild.channels.cache.get(channelId) : null;
     if (!channel?.isTextBased?.()) {
@@ -1074,15 +1087,36 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
 });
 
 client.on('messageDelete', async (message) => {
-  if (!message.guild || message.author?.bot) return;
-  const attachments = describeAttachments(message);
-  await sendAuditLog(message.guild, attachments ? 'Message and image deleted' : 'Message deleted', `Author: ${message.author || message.authorId || 'Unknown user'}\nChannel: ${message.channel}\nContent:\n${message.content || '*empty*'}${attachments ? `\nAttachments:\n${attachments}` : ''}`, '#ED4245');
+  if (!message.guild) return;
+  await sendAuditLog(message.guild, 'Message deleted', formatDeletedMessageDetails(message), '#ED4245');
 });
 
 client.on('messageDeleteBulk', async (messages) => {
   const firstMessage = messages.first();
   if (!firstMessage?.guild) return;
-  await sendAuditLog(firstMessage.guild, 'Messages bulk deleted', `${messages.size} messages were deleted in ${firstMessage.channel}.`, '#ED4245');
+
+  const messageDetails = [...messages.values()].map(formatDeletedMessageDetails);
+  const chunks = chunkLogLines(messageDetails);
+  await sendAuditLog(
+    firstMessage.guild,
+    'Messages bulk deleted',
+    `${messages.size} message(s) were deleted in #${firstMessage.channel?.name || 'unknown'} (${firstMessage.channel?.id || 'unknown'}).`,
+    '#ED4245'
+  );
+
+  for (let index = 0; index < chunks.length; index += 1) {
+    try {
+      await sendGlobalAuditLog(
+        client,
+        firstMessage.guild,
+        `Bulk deleted messages (${index + 1}/${chunks.length})`,
+        chunks[index],
+        '#ED4245'
+      );
+    } catch (error) {
+      console.error(`Failed to write bulk deleted message log chunk ${index + 1}:`, error);
+    }
+  }
 });
 
 // Handle prefix commands

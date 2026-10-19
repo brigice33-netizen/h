@@ -35,14 +35,18 @@ function getMessageText(message) {
 }
 
 function isOwoMinesMessage(message) {
-  if (!message?.guild || !message.author?.bot) return false;
+  if (!message?.guild) return false;
 
   const authorName = `${message.author.username || ''} ${message.author.globalName || ''}`.toLowerCase();
-  if (!/\bmines?\b/i.test(getMessageText(message))) return false;
-
   const isOwoApplication = String(message.applicationId || '') === OWO_APPLICATION_ID
     || String(message.author.id || '') === OWO_APPLICATION_ID;
-  return isOwoApplication || authorName.includes('owo') || Boolean(getMineBoardText(message));
+  if (!isOwoApplication && !message.author?.bot) return false;
+
+  const text = getMessageText(message);
+  if (/slow down|cooldown/i.test(text)) return false;
+  if (isOwoApplication) return true;
+
+  return Boolean(getMineBoardText(message)) || (authorName.includes('owo') && /\bmines?\b/i.test(text));
 }
 
 function getMineBoardText(message) {
