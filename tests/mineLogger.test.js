@@ -36,7 +36,9 @@ test('mine logger is disabled until explicitly enabled per guild', () => {
   assert.equal(getMineLogSourceConfigKey('guild-123'), 'mineslog:source:guild-123');
   assert.equal(isMineLoggingEnabled(null), false);
   assert.equal(isMineLoggingEnabled('false'), false);
+  assert.equal(isMineLoggingEnabled('FALSE'), false);
   assert.equal(isMineLoggingEnabled('true'), true);
+  assert.equal(isMineLoggingEnabled(' TRUE '), true);
   assert.equal(minesLogCommand.name, 'mineslog');
   assert.deepEqual(minesLogCommand.aliases, ['ml']);
 });
@@ -217,4 +219,47 @@ test('mine logger creates the log channel and updates its entry when the source 
   assert.equal(editedPayloads.length, 1);
   assert.match(editedPayloads[0].content, /45,119/);
   assert.match(editedPayloads[0].content, /tile7 \| revealed \| tile9/);
+});
+
+test('mine logger refreshes message updates that are missing the Mines board components', async () => {
+  const sentPayloads = [];
+  const components = [
+    { components: [1, 2, 3].map((n) => ({ type: 2, emoji: { name: `tile${n}` } })) },
+    { components: [4, 5, 6].map((n) => ({ type: 2, emoji: { name: `tile${n}` } })) },
+    { components: [7, 8, 9].map((n) => ({ type: 2, emoji: { name: `tile${n}` } })) }
+  ];
+  const fullMessage = makeMessage({
+    id: 'incomplete-update-message',
+    applicationId: OWO_APPLICATION_ID,
+    guild: {
+      id: 'refresh-guild',
+      channels: {
+        cache: { find: () => null },
+        create: async () => ({
+          name: MINE_LOG_CHANNEL_NAME,
+          type: ChannelType.GuildText,
+          send: async (payload) => {
+            sentPayloads.push(payload);
+            return { edit: async () => {} };
+          }
+        })
+      }
+    },
+    channel: { id: 'refresh-source', name: 'games' },
+    components
+  });
+  const update = {
+    ...fullMessage,
+    components: [],
+    fetch: async () => fullMessage
+  };
+  const readConfig = async (key) => {
+    if (key === getMineLogConfigKey('refresh-guild')) return 'true';
+    if (key === getMineLogSourceConfigKey('refresh-guild')) return 'refresh-source';
+    return null;
+  };
+
+  assert.equal(await handleMineLogMessage(update, { readConfig, refreshMissingComponents: true }), true);
+  assert.equal(sentPayloads.length, 1);
+  assert.match(sentPayloads[0].content, /tile1 \| tile2 \| tile3/);
 });

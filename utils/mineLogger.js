@@ -17,7 +17,11 @@ function getMineLogSourceConfigKey(guildId) {
 }
 
 function isMineLoggingEnabled(value) {
-  return value === 'true';
+  const normalized = String(value ?? 'false').trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1' || normalized === 'on' || normalized === 'yes') {
+    return true;
+  }
+  return false;
 }
 
 function getMessageText(message) {
@@ -37,9 +41,9 @@ function getMessageText(message) {
 function isOwoMinesMessage(message) {
   if (!message?.guild) return false;
 
-  const authorName = `${message.author.username || ''} ${message.author.globalName || ''}`.toLowerCase();
+  const authorName = `${message.author?.username || ''} ${message.author?.globalName || ''}`.toLowerCase();
   const isOwoApplication = String(message.applicationId || '') === OWO_APPLICATION_ID
-    || String(message.author.id || '') === OWO_APPLICATION_ID;
+    || String(message.author?.id || '') === OWO_APPLICATION_ID;
   if (!isOwoApplication && !message.author?.bot) return false;
 
   const text = getMessageText(message);
@@ -93,18 +97,24 @@ async function ensureMineLogChannel(guild) {
   return channel;
 }
 
-async function handleMineLogMessage(message, { readConfig = getConfig } = {}) {
-  if (!isOwoMinesMessage(message)) return false;
-
+async function handleMineLogMessage(message, { readConfig = getConfig, refreshMissingComponents = false } = {}) {
+  let sourceMessage = message;
   try {
-    const loggingEnabled = await readConfig(getMineLogConfigKey(message.guild.id));
-    if (!isMineLoggingEnabled(loggingEnabled)) return false;
-    const sourceChannelId = await readConfig(getMineLogSourceConfigKey(message.guild.id));
-    if (!sourceChannelId || message.channel?.id !== sourceChannelId) return false;
+    if (!isOwoMinesMessage(sourceMessage)) return false;
 
-    const channel = await ensureMineLogChannel(message.guild);
-    const payload = buildMineLogPayload(message);
-    const previousLog = loggedMessages.get(message.id);
+    if (sourceMessage.partial || (refreshMissingComponents && !getMineBoardText(sourceMessage))) {
+      sourceMessage = await sourceMessage.fetch();
+      if (!isOwoMinesMessage(sourceMessage)) return false;
+    }
+
+    const loggingEnabled = await readConfig(getMineLogConfigKey(sourceMessage.guild.id));
+    if (!isMineLoggingEnabled(loggingEnabled)) return false;
+    const sourceChannelId = await readConfig(getMineLogSourceConfigKey(sourceMessage.guild.id));
+    if (!sourceChannelId || sourceMessage.channel?.id !== sourceChannelId) return false;
+
+    const channel = await ensureMineLogChannel(sourceMessage.guild);
+    const payload = buildMineLogPayload(sourceMessage);
+    const previousLog = loggedMessages.get(sourceMessage.id);
 
     if (previousLog) {
       await previousLog.edit(payload);
@@ -112,13 +122,13 @@ async function handleMineLogMessage(message, { readConfig = getConfig } = {}) {
     }
 
     const logMessage = await channel.send(payload);
-    loggedMessages.set(message.id, logMessage);
+    loggedMessages.set(sourceMessage.id, logMessage);
     if (loggedMessages.size > MAX_CACHED_LOG_MESSAGES) {
       loggedMessages.delete(loggedMessages.keys().next().value);
     }
     return true;
   } catch (error) {
-    console.error(`Failed to record Owo Mines message ${message.id || '(unknown id)'}:`, error);
+    console.error(`Failed to record Owo Mines message ${sourceMessage?.id || '(unknown id)'}:`, error);
     return false;
   }
 }

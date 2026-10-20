@@ -22,6 +22,7 @@ const { handleTicketInteraction } = require('./utils/ticketSystem');
 const { handleChannelCategoryRequest } = require('./utils/channelMention');
 const { startDashboard } = require('./dashboard');
 const { COIN_DROP_CHANCE } = require('./utils/baitDrops');
+const { CONTAINER_DROPS_CONFIG_KEY, COIN_DROPS_CONFIG_KEY, isDropEnabled } = require('./utils/dropControls');
 const { handleMineLogMessage } = require('./utils/mineLogger');
 const {
   sendGlobalAuditLog,
@@ -1110,7 +1111,7 @@ async function findMessageDeletionExecutor(message, auditType = AuditLogEvent.Me
 }
 
 client.on('messageUpdate', async (oldMessage, newMessage) => {
-  await handleMineLogMessage(newMessage);
+  await handleMineLogMessage(newMessage, { refreshMissingComponents: true });
   if (!newMessage.guild || newMessage.author?.bot) return;
   const oldContent = String(oldMessage.content || '');
   const newContent = String(newMessage.content || '');
@@ -1264,7 +1265,7 @@ client.on('messageCreate', async (message) => {
         await sendMessageReply(message, `💰 ${message.author} reached a 350-message milestone and earned 1 coin!`);
       }
 
-      if (coinEconomyEnabled) {
+      if (coinEconomyEnabled && isDropEnabled(await getConfig(COIN_DROPS_CONFIG_KEY))) {
         try {
           if (Math.random() < COIN_DROP_CHANCE) {
             await addCoins(message.author.id, 1, 'coin_drop');
@@ -1284,7 +1285,9 @@ client.on('messageCreate', async (message) => {
 
   // 1% chance to drop a bait container on every message
   try {
-    if (coinEconomyEnabled && Math.random() < 0.01) {
+    if (coinEconomyEnabled
+      && isDropEnabled(await getConfig(CONTAINER_DROPS_CONFIG_KEY))
+      && Math.random() < 0.01) {
       await ensureBaits(message.author.id);
       await addBait(message.author.id, 'bait_containers', 1);
       const baits = await getBaits(message.author.id);
